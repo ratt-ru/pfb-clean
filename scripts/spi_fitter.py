@@ -92,11 +92,15 @@ def create_parser():
 
 def main(args):
     if args.psf_pars is None:
-        print("Attempting to take psf_pars from residual fits header")
+        print("Attempting to take psf_pars from residual/image fits header")
         try:
             rhdr = fits.getheader(args.residual)
         except Exception as e:
-            raise e
+            try:
+                rhdr = fits.getheader(args.model)
+            except Exception as e:
+                raise e
+
         if 'BMAJ1' in rhdr.keys():
             emaj = rhdr['BMAJ1']
             emin = rhdr['BMIN1']
@@ -184,7 +188,7 @@ def main(args):
 
     # load beam
     if args.beam_model is not None:
-        # we can pass in either a fits file with the already interpolated beam of we can interpolate from scratch
+        # we can pass in either a fits file with the already interpolated beam or we can interpolate from scratch
         if args.beam_model[-5:] == '.fits':
             bhdr = fits.getheader(args.beam_model)
             l_coord_beam, ref_lb = data_from_header(bhdr, axis=1)
