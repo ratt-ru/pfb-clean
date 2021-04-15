@@ -96,12 +96,14 @@ def main(args):
         try:
             rhdr = fits.getheader(args.residual)
         except Exception as e:
-            try:
-                rhdr = fits.getheader(args.model)
-            except Exception as e:
-                raise e
+            raise e
 
-        if 'BMAJ1' in rhdr.keys():
+        if 'BMAJ0' in rhdr.keys():
+            emaj = rhdr['BMAJ0']
+            emin = rhdr['BMIN0']
+            pa = rhdr['BPA0']
+            gaussparf = (emaj, emin, pa)
+        elif 'BMAJ1' in rhdr.keys():
             emaj = rhdr['BMAJ1']
             emin = rhdr['BMIN1']
             pa = rhdr['BPA1']
