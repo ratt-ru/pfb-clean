@@ -24,7 +24,7 @@ def create_parser():
                         "specified as emaj emin pa. \n"
                         "By default these are taken from the fits header "
                         "of the residual image.")
-    p.add_argument('-cp', "--circ-psf", type=str2bool, nargs='?', const=True, default=True,
+    p.add_argument('-cp', "--circ-psf", type=str2bool, nargs='?', const=True, default=False,
                    help="Passing this flag will convolve with a circularised "
                    "beam instead of an elliptical one")
     p.add_argument('-th', '--threshold', default=10, type=float,
