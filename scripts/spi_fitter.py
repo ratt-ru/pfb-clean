@@ -103,11 +103,13 @@ def main(args):
             emin = rhdr['BMIN0']
             pa = rhdr['BPA0']
             gaussparf = (emaj, emin, pa)
+            freq_idx0 = 0
         elif 'BMAJ1' in rhdr.keys():
             emaj = rhdr['BMAJ1']
             emin = rhdr['BMIN1']
             pa = rhdr['BPA1']
             gaussparf = (emaj, emin, pa)
+            freq_idx0 = 1
         elif 'BMAJ' in rhdr.keys():
             emaj = rhdr['BMAJ']
             emin = rhdr['BMIN']
@@ -270,7 +272,7 @@ def main(args):
 
         # convolve residual to same resolution as model
         gausspari = ()
-        for i in range(1,nband+1):
+        for i in range(freq_idx0,nband+freq_idx0):
             key = 'BMAJ' + str(i)
             if key in rhdr.keys():
                 emaj = rhdr[key]
