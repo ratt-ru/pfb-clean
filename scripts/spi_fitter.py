@@ -64,10 +64,10 @@ def create_parser():
                    help='Reference frequency where the I0 map is sought. \n'
                    "Will overwrite in fits headers of output.")
     p.add_argument('-otype', '--out_dtype', default='f4', type=str,
-                   help="Data type of output. Default is single precision") 
+                   help="Data type of output. Default is single precision")
     p.add_argument('-acr', '--add-convolved-residuals', type=str2bool, nargs='?', const=True, default=True,
                    help='Flag to add in the convolved residuals before fitting components')
-    p.add_argument('-ms', "--ms", nargs="+", type=str, 
+    p.add_argument('-ms', "--ms", nargs="+", type=str,
                    help="Mesurement sets used to make the image. \n"
                    "Used to get paralactic angles if doing primary beam correction")
     p.add_argument('-f', "--field", type=int, default=0,
@@ -95,10 +95,8 @@ def main(args):
         print("Attempting to take psf_pars from residual fits header")
         try:
             rhdr = fits.getheader(args.residual)
-        except KeyError:
-            raise RuntimeError("Either provide a residual with beam "
-                               "information or pass them in using --psf_pars "
-                               "argument")
+        except Exception as e:
+            raise e
         if 'BMAJ1' in rhdr.keys():
             emaj = rhdr['BMAJ1']
             emin = rhdr['BMIN1']
@@ -109,9 +107,13 @@ def main(args):
             emin = rhdr['BMIN']
             pa = rhdr['BPA']
             gaussparf = (emaj, emin, pa)
+        else:
+            raise ValueError("No beam parameters found in residual."
+                             "You will have to provide them manually.")
+
     else:
         gaussparf = tuple(args.psf_pars)
-        
+
     if args.circ_psf:
         e = np.maximum(gaussparf[0], gaussparf[1])
         gaussparf = list(gaussparf)
@@ -119,7 +121,7 @@ def main(args):
         gaussparf[1] = e
         gaussparf[2] = 0.0
         gaussparf = tuple(gaussparf)
-    
+
     print("Using emaj = %3.2e, emin = %3.2e, PA = %3.2e \n" % gaussparf)
 
     # load model image
@@ -169,7 +171,7 @@ def main(args):
 
     # save next to model if no outfile is provided
     if args.output_filename is None:
-        # strip .fits from model filename 
+        # strip .fits from model filename
         tmp = args.model[::-1]
         idx = tmp.find('.')
         outfile = args.model[0:-(idx+1)]
@@ -178,7 +180,7 @@ def main(args):
 
     xx, yy = np.meshgrid(l_coord, m_coord, indexing='ij')
 
-    # load beam 
+    # load beam
     if args.beam_model is not None:
         # we can pass in either a fits file with the already interpolated beam of we can interpolate from scratch
         if args.beam_model[-5:] == '.fits':
@@ -192,7 +194,7 @@ def main(args):
             m_coord_beam -= ref_mb
             if not np.array_equal(m_coord_beam, m_coord):
                 raise ValueError("m coordinates of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
-            
+
             freqs_beam, _ = data_from_header(bhdr, axis=freq_axis)
             if not np.array_equal(freqs, freqs_beam):
                 raise ValueError("Freqs of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
@@ -210,7 +212,7 @@ def main(args):
 
         else:
             beam_image = interpolate_beam(xx, yy, freqs, args)
-            
+
         if 'b' in args.products:
             name = outfile + '.power_beam.fits'
             save_fits(name, beam_image, mhdr, dtype=args.out_dtype)
@@ -253,7 +255,7 @@ def main(args):
         m_res -= ref_mb
         if not np.array_equal(m_res, m_coord):
             raise ValueError("m coordinates of residual do not match those of model")
-        
+
         freqs_res, _ = data_from_header(rhdr, axis=freq_axis)
         if not np.array_equal(freqs, freqs_res):
             raise ValueError("Freqs of residual do not match those of model")
