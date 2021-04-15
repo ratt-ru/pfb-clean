@@ -248,7 +248,7 @@ def main(args):
         # save convolved model
         if 'm' in args.products:
             name = outfile + '.convolved_model.fits'
-            save_fits(name, model, new_hdr, dtype=args.out_dtype)
+            save_fits(name, np.expand_dims(model, axis=4-stokes_axis), new_hdr, dtype=args.out_dtype)
             print("Wrote convolved model to %s \n" % name)
 
 
@@ -292,7 +292,7 @@ def main(args):
 
             if 'r' in args.products:
                 name = outfile + '.convolved_residual.fits'
-                save_fits(name, resid, rhdr)
+                save_fits(name, np.expand_dims(resid, axis=4-stokes_axis), rhdr)
                 print("Wrote convolved residuals to %s" % name)
 
 
