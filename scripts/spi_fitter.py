@@ -217,7 +217,7 @@ def main(args):
 
         if 'b' in args.products:
             name = outfile + '.power_beam.fits'
-            save_fits(name, np.expand_dims(beam_image, axis=stokes_axis), mhdr, dtype=args.out_dtype)
+            save_fits(name, np.expand_dims(beam_image, axis=4 - stokes_axis), mhdr, dtype=args.out_dtype)
             print("Wrote average power beam to %s \n" % name)
 
     else:
@@ -360,7 +360,7 @@ def main(args):
         Irec_cube = i0map[None, :, :] * \
             (freqs[:, None, None]/ref_freq)**alphamap[None, :, :]
         name = outfile + '.Irec_cube.fits'
-        save_fits(name, np.expand_dims(Irec_cube, axis=stokes_axis), mhdr, dtype=args.out_dtype)
+        save_fits(name, np.expand_dims(Irec_cube, axis=4 - stokes_axis), mhdr, dtype=args.out_dtype)
         print("Wrote reconstructed cube to %s" % name)
 
     # save alpha map
