@@ -210,7 +210,7 @@ def main(args):
                 raise ValueError("Freqs of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
 
             beam_image = load_fits(args.beam_model, dtype=args.out_dtype).squeeze()
-        elif args.beam_model == "JimBeam":
+        elif args.beam_model.lower() == "jimbeam":
             from katbeam import JimBeam
             if args.band.lower() == 'l':
                 beam = JimBeam('MKAT-AA-L-JIM-2020')
