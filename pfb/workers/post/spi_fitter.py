@@ -1,96 +1,92 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # flake8: noqa
+import click
+from omegaconf import OmegaConf
 
-import argparse
-import dask
-import dask.array as da
-import numpy as np
-from astropy.io import fits
-from africanus.model.spi.dask import fit_spi_components
-from pfb.utils import load_fits, save_fits, convolve2gaussres, data_from_header, set_header_info, str2bool
-from scripts.power_beam_maker import interpolate_beam
+#     p.add_argument('-ms', "--ms", nargs="+", type=str,
+#                    help="Mesurement sets used to make the image. \n"
+#                    "Used to get paralactic angles if doing primary beam correction")
+#     p.add_argument('-f', "--field", type=int, default=0,
+#                    help="Field ID")
+#     p.add_argument('-bm', '--beam-model', default=None, type=str,
+#                    help="Fits beam model to use. \n"
+#                         "It is assumed that the pattern is path_to_beam/"
+#                         "name_corr_re/im.fits. \n"
+#                         "Provide only the path up to name "
+#                         "e.g. /home/user/beams/meerkat_lband. \n"
+#                         "Patterns mathing corr are determined "
+#                         "automatically. \n"
+#                         "Only real and imaginary beam models currently "
+#                         "supported.")
+#     p.add_argument('-st', "--sparsify-time", type=int, default=10,
+#                    help="Used to select a subset of time ")
+#     p.add_argument('-ct', '--corr-type', type=str, default='linear',
+#                    help="Correlation typ i.e. linear or circular. ")
+#     p.add_argument('-band', "--band", type=str, default='l',
+#                    help="Band to use with JimBeam. L or UHF")
+#     return p
 
-def create_parser():
-    p = argparse.ArgumentParser(description='Simple spectral index fitting tool.',
-                                formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument('-model', "--model", type=str)
-    p.add_argument('-residual', "--residual", type=str)
-    p.add_argument('-o', '--output-filename', type=str,
-                   help="Path to output directory + prefix. \n"
-                        "Placed next to input model if outfile not provided.")
-    p.add_argument('-pp', '--psf-pars', default=None, nargs='+', type=float,
-                   help="Beam parameters matching FWHM of restoring beam "
-                        "specified as emaj emin pa. \n"
-                        "By default these are taken from the fits header "
-                        "of the residual image.")
-    p.add_argument('-cp', "--circ-psf", type=str2bool, nargs='?', const=True, default=True,
-                   help="Passing this flag will convolve with a circularised "
-                   "beam instead of an elliptical one")
-    p.add_argument('-th', '--threshold', default=10, type=float,
-                   help="Multiple of the rms in the residual to threshold "
-                        "on. \n"
-                        "Only components above threshold*rms will be fit.")
-    p.add_argument('-maxDR', '--maxDR', default=100, type=float,
-                   help="Maximum dynamic range used to determine the "
-                        "threshold above which components need to be fit. \n"
-                        "Only used if residual is not passed in.")
-    p.add_argument('-ncpu', '--ncpu', default=0, type=int,
-                   help="Number of threads to use. \n"
-                        "Default of zero means use all threads")
-    p.add_argument('-pb-min', '--pb-min', type=float, default=0.15,
-                   help="Set image to zero where pb falls below this value")
-    p.add_argument('-products', '--products', default='aeikIcmrb', type=str,
-                   help="Outputs to write. Letter correspond to: \n"
-                   "a - alpha map \n"
-                   "e - alpha error map \n"
-                   "i - I0 map \n"
-                   "k - I0 error map \n"
-                   "I - reconstructed cube form alpha and I0 \n"
-                   "c - restoring beam used for convolution \n"
-                   "m - convolved model \n"
-                   "r - convolved residual \n"
-                   "b - average power beam \n"
-                   "Default is to write all of them")
-    p.add_argument('-pf', "--padding-frac", default=0.5, type=float,
-                   help="Padding factor for FFT's.")
-    p.add_argument('-dc', "--dont-convolve", type=str2bool, nargs='?', const=True, default=False,
-                   help="Passing this flag bypasses the convolution "
-                   "by the clean beam")
-    p.add_argument('-cw', "--channel_weights", default=None, nargs='+', type=float,
-                   help="Per-channel weights to use during fit to frequency axis. \n "
-                   "Only has an effect if no residual is passed in (for now).")
-    p.add_argument('-rf', '--ref-freq', default=None, type=np.float64,
-                   help='Reference frequency where the I0 map is sought. \n'
-                   "Will overwrite in fits headers of output.")
-    p.add_argument('-otype', '--out_dtype', default='f4', type=str,
-                   help="Data type of output. Default is single precision") 
-    p.add_argument('-acr', '--add-convolved-residuals', type=str2bool, nargs='?', const=True, default=True,
-                   help='Flag to add in the convolved residuals before fitting components')
-    p.add_argument('-ms', "--ms", nargs="+", type=str, 
-                   help="Mesurement sets used to make the image. \n"
-                   "Used to get paralactic angles if doing primary beam correction")
-    p.add_argument('-f', "--field", type=int, default=0,
-                   help="Field ID")
-    p.add_argument('-bm', '--beam-model', default=None, type=str,
-                   help="Fits beam model to use. \n"
-                        "It is assumed that the pattern is path_to_beam/"
-                        "name_corr_re/im.fits. \n"
-                        "Provide only the path up to name "
-                        "e.g. /home/user/beams/meerkat_lband. \n"
-                        "Patterns mathing corr are determined "
-                        "automatically. \n"
-                        "Only real and imaginary beam models currently "
-                        "supported.")
-    p.add_argument('-st', "--sparsify-time", type=int, default=10,
-                   help="Used to select a subset of time ")
-    p.add_argument('-ct', '--corr-type', type=str, default='linear',
-                   help="Correlation typ i.e. linear or circular. ")
-    p.add_argument('-band', "--band", type=str, default='l',
-                   help="Band to use with JimBeam. L or UHF")
-    return p
+from pfb.workers.main import cli
 
-def main(args):
+
+@cli.command()
+@click.option('-image', '--image', required=True,
+              help="Path to model or restored image cube.")
+@click.option('-resid', "--residual", required=False,
+              help="Path to residual image cube.")
+@click.option('-o', '--output-filename',
+              help="Path to output directory + prefix. \n"
+              "Placed next to input model if outfile not provided.")
+@click.option('-pp', '--psf-pars', nargs=3, type=float,
+              help="Beam parameters matching FWHM of restoring beam "
+                   "specified as emaj emin pa. \n"
+                   "By default these are taken from the fits header "
+                   "of the residual image.")
+@click.option('-th', '--threshold', default=10, type=float, show_default=True,
+              help="Multiple of the rms in the residual to threshold on. \n"
+                   "Only components above threshold*rms will be fit.")
+@click.option('-maxdr', '--maxDR', default=100, type=float, show_default=True,
+              help="Maximum dynamic range used to determine the "
+                   "threshold above which components need to be fit. \n"
+                   "Only used if residual is not passed in.")
+@click.option('-nthreads', '--nthreads', default=1, type=int, show_default=True,
+              help="Number of threads to use.")
+@click.option('-pb-min', '--pb-min', type=float, default=0.15,
+              help="Set image to zero where pb falls below this value")
+@click.option('-products', '--products', default='aeikIcmrb', type=str,
+              help="Outputs to write. Letter correspond to: \n"
+              "a - alpha map \n"
+              "e - alpha error map \n"
+              "i - I0 map \n"
+              "k - I0 error map \n"
+              "I - reconstructed cube form alpha and I0 \n"
+              "c - restoring beam used for convolution \n"
+              "m - convolved model \n"
+              "r - convolved residual \n"
+              "b - average power beam \n"
+              "Default is to write all of them")
+@click.option('-pf', "--padding-frac", default=0.5, type=float,
+              show_default=True, help="Padding factor for FFT's.")
+@click.option('-dc', "--dont-convolve", is_flag=True,
+              help="Do not convolve by the clean beam before fitting")
+@click.option('-rf', '--ref-freq', type=float,
+              help='Reference frequency where the I0 map is sought. '
+              "Will overwrite in fits headers of output.")
+@click.option('-otype', '--out-dtype', default='f4', type=str,
+              help="Data type of output. Default is single precision")
+@click.option('-acr', '--add-convolved-residuals', is_flag=True,
+              help='Flag to add in the convolved residuals before '
+              'fitting components')
+def spi_fitter(**kw):
+    args = OmegaConf.create(kw)
+
+    # use all threads if nthreads set to zero
+    if not args.nthreads:
+        import multiprocessing
+        args.nthreads = multiprocessing.cpu_count()
+
+    from pfb import set_threads
+    set_threads(args.nthreads)
+
     if args.psf_pars is None:
         print("Attempting to take psf_pars from residual fits header")
         try:
@@ -111,7 +107,7 @@ def main(args):
             gaussparf = (emaj, emin, pa)
     else:
         gaussparf = tuple(args.psf_pars)
-        
+
     if args.circ_psf:
         e = np.maximum(gaussparf[0], gaussparf[1])
         gaussparf = list(gaussparf)
@@ -119,7 +115,7 @@ def main(args):
         gaussparf[1] = e
         gaussparf[2] = 0.0
         gaussparf = tuple(gaussparf)
-    
+
     print("Using emaj = %3.2e, emin = %3.2e, PA = %3.2e \n" % gaussparf)
 
     # load model image
@@ -157,7 +153,8 @@ def main(args):
 
     if args.ref_freq is not None and args.ref_freq != ref_freq:
         ref_freq = args.ref_freq
-        print('Provided reference frequency does not match that of fits file. Will overwrite.')
+        print(
+            'Provided reference frequency does not match that of fits file. Will overwrite.')
 
     print("Cube frequencies:")
     with np.printoptions(precision=2):
@@ -169,7 +166,7 @@ def main(args):
 
     # save next to model if no outfile is provided
     if args.output_filename is None:
-        # strip .fits from model filename 
+        # strip .fits from model filename
         tmp = args.model[::-1]
         idx = tmp.find('.')
         outfile = args.model[0:-(idx+1)]
@@ -178,7 +175,7 @@ def main(args):
 
     xx, yy = np.meshgrid(l_coord, m_coord, indexing='ij')
 
-    # load beam 
+    # load beam
     if args.beam_model is not None:
         # we can pass in either a fits file with the already interpolated beam of we can interpolate from scratch
         if args.beam_model[-5:] == '.fits':
@@ -186,18 +183,22 @@ def main(args):
             l_coord_beam, ref_lb = data_from_header(bhdr, axis=1)
             l_coord_beam -= ref_lb
             if not np.array_equal(l_coord_beam, l_coord):
-                raise ValueError("l coordinates of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
+                raise ValueError(
+                    "l coordinates of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
 
             m_coord_beam, ref_mb = data_from_header(bhdr, axis=2)
             m_coord_beam -= ref_mb
             if not np.array_equal(m_coord_beam, m_coord):
-                raise ValueError("m coordinates of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
-            
+                raise ValueError(
+                    "m coordinates of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
+
             freqs_beam, _ = data_from_header(bhdr, axis=freq_axis)
             if not np.array_equal(freqs, freqs_beam):
-                raise ValueError("Freqs of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
+                raise ValueError(
+                    "Freqs of beam model do not match those of image. Use power_beam_maker to interpolate to fits header.")
 
-            beam_image = load_fits(args.beam_model, dtype=args.out_dtype).squeeze()
+            beam_image = load_fits(
+                args.beam_model, dtype=args.out_dtype).squeeze()
         elif args.beam_model == "JimBeam":
             from katbeam import JimBeam
             if args.band.lower() == 'l':
@@ -210,7 +211,7 @@ def main(args):
 
         else:
             beam_image = interpolate_beam(xx, yy, freqs, args)
-            
+
         if 'b' in args.products:
             name = outfile + '.power_beam.fits'
             save_fits(name, beam_image, mhdr, dtype=args.out_dtype)
@@ -225,7 +226,8 @@ def main(args):
     if not args.dont_convolve:
         print("Convolving model")
         # convolve model to desired resolution
-        model, gausskern = convolve2gaussres(model, xx, yy, gaussparf, args.ncpu, None, args.padding_frac)
+        model, gausskern = convolve2gaussres(
+            model, xx, yy, gaussparf, args.ncpu, None, args.padding_frac)
 
         # save clean beam
         if 'c' in args.products:
@@ -239,7 +241,6 @@ def main(args):
             save_fits(name, model, new_hdr, dtype=args.out_dtype)
             print("Wrote convolved model to %s \n" % name)
 
-
     # add in residuals and set threshold
     if args.residual is not None:
         resid = load_fits(args.residual, dtype=args.out_dtype).squeeze()
@@ -247,20 +248,22 @@ def main(args):
         l_res, ref_lb = data_from_header(rhdr, axis=1)
         l_res -= ref_lb
         if not np.array_equal(l_res, l_coord):
-            raise ValueError("l coordinates of residual do not match those of model")
+            raise ValueError(
+                "l coordinates of residual do not match those of model")
 
         m_res, ref_mb = data_from_header(rhdr, axis=2)
         m_res -= ref_mb
         if not np.array_equal(m_res, m_coord):
-            raise ValueError("m coordinates of residual do not match those of model")
-        
+            raise ValueError(
+                "m coordinates of residual do not match those of model")
+
         freqs_res, _ = data_from_header(rhdr, axis=freq_axis)
         if not np.array_equal(freqs, freqs_res):
             raise ValueError("Freqs of residual do not match those of model")
 
         # convolve residual to same resolution as model
         gausspari = ()
-        for i in range(1,nband+1):
+        for i in range(1, nband+1):
             key = 'BMAJ' + str(i)
             if key in rhdr.keys():
                 emaj = rhdr[key]
@@ -268,13 +271,15 @@ def main(args):
                 pa = rhdr['BPA' + str(i)]
                 gausspari += ((emaj, emin, pa),)
             else:
-                print("Can't find Gausspars in residual header, unable to add residuals back in")
+                print(
+                    "Can't find Gausspars in residual header, unable to add residuals back in")
                 gausspari = None
                 break
 
         if gausspari is not None and args.add_convolved_residuals:
             print("Convolving residuals")
-            resid, _ = convolve2gaussres(resid, xx, yy, gaussparf, args.ncpu, gausspari, args.padding_frac, norm_kernel=False)
+            resid, _ = convolve2gaussres(
+                resid, xx, yy, gaussparf, args.ncpu, gausspari, args.padding_frac, norm_kernel=False)
             model += resid
             print("Convolved residuals added to convolved model")
 
@@ -283,18 +288,16 @@ def main(args):
                 save_fits(name, resid, rhdr)
                 print("Wrote convolved residuals to %s" % name)
 
-
-
         counts = np.sum(resid != 0)
         rms = np.sqrt(np.sum(resid**2)/counts)
         rms_cube = np.std(resid.reshape(nband, npix_l*npix_m), axis=1).ravel()
         threshold = args.threshold * rms
         print("Setting cutoff threshold as %i times the rms "
-            "of the residual " % args.threshold)
+              "of the residual " % args.threshold)
         del resid
     else:
         print("No residual provided. Setting  threshold i.t.o dynamic range. "
-            "Max dynamic range is %i " % args.maxDR)
+              "Max dynamic range is %i " % args.maxDR)
         threshold = model.max()/args.maxDR
         rms_cube = None
 
@@ -306,8 +309,8 @@ def main(args):
     nanindices = np.argwhere(minimage <= threshold)
     if not maskindices.size:
         raise ValueError("No components found above threshold. "
-                        "Try lowering your threshold."
-                        "Max of convolved model is %3.2e" % model.max())
+                         "Try lowering your threshold."
+                         "Max of convolved model is %3.2e" % model.max())
     fitcube = model[:, maskindices[:, 0], maskindices[:, 1]].T
     beam_comps = beam_image[:, maskindices[:, 0], maskindices[:, 1]].T
 
@@ -335,7 +338,7 @@ def main(args):
 
     print("Fitting %i components" % ncomps)
     alpha, alpha_err, Iref, i0_err = fit_spi_components(fitcube, weights, freqsdask,
-                                        np.float64(ref_freq), beam=beam_comps).compute()
+                                                        np.float64(ref_freq), beam=beam_comps).compute()
     print("Done. Writing output. \n")
 
     alphamap = np.zeros(model[0].shape, dtype=model.dtype)
@@ -388,26 +391,26 @@ def main(args):
     print("All done here")
 
 
-if __name__ == "__main__":
-    args = create_parser().parse_args()
+# if __name__ == "__main__":
+#     args = create_parser().parse_args()
 
-    if args.ncpu:
-        from multiprocessing.pool import ThreadPool
-        dask.config.set(pool=ThreadPool(args.ncpu))
-    else:
-        import multiprocessing
-        args.ncpu = multiprocessing.cpu_count()
+#     if args.ncpu:
+#         from multiprocessing.pool import ThreadPool
+#         dask.config.set(pool=ThreadPool(args.ncpu))
+#     else:
+#         import multiprocessing
+#         args.ncpu = multiprocessing.cpu_count()
 
-    print(' \n ')
-    GD = vars(args)
-    print('Input Options:')
-    for key in GD.keys():
-        print(key, ' = ', GD[key])
+#     print(' \n ')
+#     GD = vars(args)
+#     print('Input Options:')
+#     for key in GD.keys():
+#         print(key, ' = ', GD[key])
 
-    print(' \n ')
+#     print(' \n ')
 
-    print("Using %i threads" % args.ncpu)
+#     print("Using %i threads" % args.ncpu)
 
-    print(' \n ')
+#     print(' \n ')
 
-    main(args)
+#     main(args)
