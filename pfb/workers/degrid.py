@@ -119,14 +119,28 @@ def _degrid(**kw):
     from astropy.io import fits
 
     basename = f'{opts.output_filename}_{opts.product.upper()}'
-    mds_name = f'{basename}{opts.postfix}.mds.zarr'
-    mds = xds_from_zarr(mds_name)[0]
-    cell_rad = mds.cell_rad
-    mfreqs = mds.freq.values
-    ref_freq = mfreqs[0]
-    model = mds.MODEL.values
+    if opts.model_fits is not None:
+        # get moidel detraisl from fits
+        from astropy.io import fits
+        from pfb.utils.fits import load_fits, data_from_header
+        hdr = fits.getheader(opts.model_fits, 1)
+        model = load_fits(opts.model_fits, dtype=np.float64)[0]
+        # mfreqs, ref_freq = data_from_header
+        mfreqs = np.array((hdr['RESTFRQ']))
+        ref_freq = hdr['RESTFRQ']
+        cell_rad = np.abs(np.deg2rad(hdr['CDELT1']))
+
+    else:
+        mds_name = f'{basename}{opts.postfix}.mds.zarr'
+        mds = xds_from_zarr(mds_name)[0]
+        cell_rad = mds.cell_rad
+        mfreqs = mds.freq.values
+        ref_freq = mfreqs[0]
+        model = mds.MODEL.values
+        wsums = mds.WSUM.values
+
     nband, nx, ny = model.shape
-    wsums = mds.WSUM.values
+
 
     if opts.nband_out is None:
         nband_out = nband
@@ -154,6 +168,8 @@ def _degrid(**kw):
     # chan <-> band mapping
     freqs, fbin_idx, fbin_counts, freq_out, band_mapping, chan_chunks = \
         chan_to_band_mapping(opts.ms, nband=nband_out, group_by=group_by)
+
+    # import pdb; pdb.set_trace()
 
     # if mstype == 'zarr':
     #     if opts.model_column in xds[0].keys():
@@ -276,6 +292,7 @@ def _degrid(**kw):
                                      ref_freq, freq_fitted)
 
             uvw = ds.UVW.data
+            # import pdb; pdb.set_trace()
             vis_I = im2vis(uvw,
                            freqs[ms][idt],
                            model,
