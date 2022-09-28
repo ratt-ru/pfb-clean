@@ -128,7 +128,7 @@ def _degrid(**kw):
         # mfreqs, ref_freq = data_from_header
         mfreqs = np.array((hdr['RESTFRQ']))
         ref_freq = hdr['RESTFRQ']
-        cell_rad = np.abs(np.deg2rad(hdr['CDELT1']))
+        cell_rad = np.abs(hdr['CDELT1'])
 
     else:
         mds_name = f'{basename}{opts.postfix}.mds.zarr'
