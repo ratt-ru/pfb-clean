@@ -205,9 +205,7 @@ def _init(**kw):
     elif opts.weight_column is not None:
         print(f"Using weights from {opts.weight_column} column", file=log)
         columns += (opts.weight_column,)
-        if opts.weight_column == 'WEIGHT':
-            schema[opts.weight_column] = {'dims': ('corr')}
-        else:
+        if opts.weight_column != 'WEIGHT':
             schema[opts.weight_column] = {'dims': ('chan', 'corr')}
     else:
         print(f"No weights provided, using unity weights", file=log)
@@ -288,6 +286,7 @@ def _init(**kw):
                         tmp_dict[name] = val
 
                 gain_chunks[ms].append(tmp_dict)
+
 
     out_datasets = []
     radec = None  # assumes we are only imaging field 0 of first MS
