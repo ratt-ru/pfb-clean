@@ -22,6 +22,17 @@ cabs:
     _include:
       - (pfb.parser)grid.yaml
 
+  'pfb_l2reweight':
+    command: pfb.workers.l2reweight.l2reweight
+    flavour: python-ext
+    policies:
+      pass_missing_as_none: true
+      prefix: '--'
+      replace: {'_': '-'}
+
+    _include:
+      - (pfb.parser)l2reweight.yaml
+
   'pfb_degrid':
     command: pfb.workers.degrid.degrid
     flavour: python-ext
