@@ -860,7 +860,17 @@ def setup_image_data(dds, opts, apparent=False, log=None):
             psfhat[b] += ds.PSFHAT.data
         mean_beam[b] += ds.BEAM.data * ds.WSUM.data[0]
         wsums[b] += ds.WSUM.data[0]
-    wsums = da.stack(wsums).squeeze()
+    
+
+    wsums = da.stack(wsums)
+    print(wsums.shape, file=log)
+    if nband == 1:
+        wsums = wsums.reshape(-1)
+    else:
+        wsums = wsums.squeeze()
+    
+    print(wsums.shape, file=log)
+
     wsum = wsums.sum()
     dirty = da.stack(dirty)/wsum
     if opts.residual_name in ds:
