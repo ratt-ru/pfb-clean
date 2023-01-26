@@ -9,6 +9,8 @@ log = pyscilog.get_logger('L2REWEIGHT')
 from scabha.schema_utils import clickify_parameters
 from pfb.parser.schemas import schema
 
+import numpy as np
+
 # create default parameters from schema
 defaults = {}
 for key in schema.l2reweight["inputs"].keys():
@@ -85,15 +87,19 @@ def _l2reweight(**kw):
                                 epsilon=opts.epsilon,
                                 nthreads=opts.nthreads)
 
-
+        dof = opts.dof 
         res = ds.VIS.values - model_vis
-        wgt = ds.WEIGHT.values
+        res = np.expand_dims(res, axis=-1)
 
-        # do your reweighting here
-        # new_wgt = ...
+        sigma2 = np.linalg.norm(res)**2/len(res.reshape(-1))
 
 
-        ds_out = ds.assign(**{'WEIGHT': (('row', 'chan'), wgt)})
+        new_wgt = np.ones_like(ds.WEIGHT.values)
+        new_wgt = (dof + 1) / (dof + (1/sigma2)*np.linalg.norm(res, axis=-1)**2)
+
+        print(new_wgt.shape, file=log)
+
+        ds_out = ds.assign(**{'WEIGHT': (('row', 'chan'), new_wgt)})
         out_datasets.append(ds_out)
 
 
