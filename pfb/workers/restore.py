@@ -1,5 +1,6 @@
 # flake8: noqa
 from contextlib import ExitStack
+from pathlib import Path
 from pfb.workers.main import cli
 import click
 from omegaconf import OmegaConf
@@ -21,12 +22,27 @@ def restore(**kw):
     '''
     Create fits image cubes from data products (eg. restored images).
     '''
-    defaults.update(kw)
-    opts = OmegaConf.create(defaults)
-    pyscilog.log_to_file(f'{opts.output_filename}_{opts.product}{opts.suffix}.log')
-    if opts.nworkers is None:
-        opts.nworkers = opts.nband
+    import time
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    ldir = Path(opts.log_directory).resolve()
+    ldir.mkdir(parents=True, exist_ok=True)
+    logname = f'{str(ldir)}/restore_{timestamp}.log'
+    pyscilog.log_to_file(logname)
+    print(f'Logs will be written to {logname}', file=log)
 
+    from daskms.fsspec_store import DaskMSStore
+    from pfb.utils.naming import set_output_names
+    basedir, oname, fits_output_folder = set_output_names(opts.output_filename,
+                                                          opts.product,
+                                                          opts.fits_output_folder)
+
+    basename = f'{basedir}/{oname}'
+    fits_oname = f'{fits_output_folder}/{oname}'
+
+    opts.output_filename = basename
+    dds_name = f'{basename}_{opts.suffix}.dds'
+    dds_store = DaskMSStore(dds_name)
+    opts.fits_output_folder = fits_output_folder
     OmegaConf.set_struct(opts, True)
 
     with ExitStack() as stack:
@@ -52,10 +68,18 @@ def _restore(**kw):
                                 dds2fits, dds2fits_mfs)
     from pfb.utils.misc import Gaussian2D, fitcleanbeam, convolve2gaussres, dds2cubes
     from ducc0.fft import c2c
+    from ducc0.misc import resize_thread_pool, thread_pool_size
+    nthreads_tot = opts.nthreads_dask * opts.nvthreads
+    resize_thread_pool(nthreads_tot)
+    print(f'ducc0 max number of threads set to {thread_pool_size()}', file=log)
 
-    basename = f'{opts.output_filename}_{opts.product.upper()}'
+    basename = opts.output_filename
+    if opts.fits_output_folder is not None:
+        fits_oname = opts.fits_output_folder + '/' + basename.split('/')[-1]
+    else:
+        fits_oname = basename
+
     dds_name = f'{basename}_{opts.suffix}.dds'
-
     dds = xds_from_zarr(dds_name)
     nband = opts.nband
     nx = dds[0].x.size
@@ -76,9 +100,15 @@ def _restore(**kw):
     hdr_mfs = set_wcs(cell_deg, cell_deg, nx, ny, radec, ref_freq)
     hdr = set_wcs(cell_deg, cell_deg, nx, ny, radec, freq)
 
+    if opts.overwrite:
+        print("Warning! Potentially overwriting output images",
+              file=log)
+
     # stack cubes
     dirty, model, residual, psf, _, _, wsums, _ = dds2cubes(dds,
                                                             nband,
+                                                            modelname=opts.model_name,
+                                                            residname=opts.residual_name,
                                                             apparent=True,
                                                             dual=False)
     wsum = np.sum(wsums)
